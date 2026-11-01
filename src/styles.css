@@ -1081,9 +1081,11 @@ button {
   }
 
   .principal__text::before {
-    top: -44px;
-    left: 50%;
-    transform: translateX(-50%);
+    position: static;
+    display: block;
+    font-size: 64px;
+    margin: 0 auto -6px;
+    text-align: center;
   }
 
   .principal__text .section-title {
@@ -2562,10 +2564,9 @@ button {
     font-size: 14px;
   }
 
-  .quote--main,
-  .quote--small {
-    padding-left: 44px;
-    padding-right: 40px;
+  .quote--main::before {
+    font-size: 56px;
+    margin-bottom: -12px;
   }
 }
 

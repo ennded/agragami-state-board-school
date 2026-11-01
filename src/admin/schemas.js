@@ -40,6 +40,12 @@ const pageFields = [
       { name: "heading", label: "Heading", type: "text", help: 'Use | to split thin and bold text, for example "Our|faculty".' },
       { name: "sub", label: "Small coloured sub heading", type: "text" },
       { name: "image", label: "Photo", type: "file" },
+      {
+        name: "images",
+        label: "Photo grid",
+        type: "images",
+        help: "Use this instead of the single Photo above when you have several photos for one section — they're shown as a grid, and open full-size when clicked.",
+      },
       { name: "text", label: "Paragraphs (one per line)", type: "lines", rows: 6 },
       { name: "list", label: "Bullet points (one per line)", type: "lines", rows: 4 },
       {

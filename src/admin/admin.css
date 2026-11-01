@@ -334,6 +334,37 @@
   border-radius: 4px;
 }
 
+/* multi-photo "images" field */
+.adm-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.adm-photo-grid__item {
+  position: relative;
+}
+
+.adm-photo-grid__item img {
+  display: block;
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border: 1px solid var(--a-line);
+  border-radius: 4px;
+}
+
+.adm-photo-grid__item .adm-icon {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  background: #fff;
+  border-color: var(--a-line);
+}
+
 /* repeatable items */
 .adm-list {
   margin: 0 0 10px;

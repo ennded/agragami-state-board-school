@@ -72,6 +72,9 @@ export default function FieldEditor({ field, value, onChange }) {
     case "file":
       return <FileField id={id} label={label} help={help} value={value} onChange={onChange} />;
 
+    case "images":
+      return <ImagesField label={label} help={help} value={value} onChange={onChange} />;
+
     case "object":
       return <ObjectFields fields={field.fields} value={value} onChange={onChange} />;
 
@@ -143,6 +146,63 @@ function FileField({ id, label, help, value, onChange }) {
           Open the file
         </a>
       )}
+      {error && <p className="adm-error">{error}</p>}
+      {help}
+    </div>
+  );
+}
+
+// A grid of photos (section "images" field) — shown on the website as a
+// click-to-enlarge grid, not one giant image. Each item is a plain photo URL.
+function ImagesField({ label, help, value, onChange }) {
+  const photos = Array.isArray(value) ? value : [];
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function add(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      const urls = [];
+      for (const file of files) {
+        const { url } = await api("/upload", { method: "POST", file });
+        urls.push(url);
+      }
+      onChange([...photos, ...urls]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const remove = (i) => {
+    if (!window.confirm("Remove this photo? This cannot be undone until you save.")) return;
+    onChange(photos.filter((_, j) => j !== i));
+  };
+
+  return (
+    <div className="adm-field">
+      {label}
+      {photos.length > 0 && (
+        <div className="adm-photo-grid">
+          {photos.map((src, i) => (
+            <div key={i} className="adm-photo-grid__item">
+              <img src={src} alt="" />
+              <button type="button" className="adm-icon adm-icon--danger" onClick={() => remove(i)} aria-label={`Remove photo ${i + 1}`}>
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <label className="adm-btn adm-btn--light">
+        {busy ? "Uploading..." : "+ Add photos"}
+        <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple onChange={add} disabled={busy} hidden />
+      </label>
       {error && <p className="adm-error">{error}</p>}
       {help}
     </div>
