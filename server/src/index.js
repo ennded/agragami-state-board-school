@@ -15,7 +15,7 @@ import { createStore } from "./store.js";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const uploadsDir = path.join(root, "uploads");
-const clientDist = path.join(root, "..", "dist");
+const clientDist = path.join(root, "dist");
 
 const {
   PORT = 5000,
@@ -223,7 +223,7 @@ async function main() {
   if (fs.existsSync(path.join(clientDist, "index.html"))) {
     app.use(express.static(clientDist));
     app.get(/^\/(?!api\/|uploads\/).*/, (req, res) => res.sendFile(path.join(clientDist, "index.html")));
-    console.log("Serving the website from ../dist");
+    console.log("Serving the website from ./dist");
   }
 
   app.use("/api", (req, res) => res.status(404).json({ error: "Not found." }));
