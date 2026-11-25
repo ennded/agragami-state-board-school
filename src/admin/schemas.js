@@ -22,7 +22,7 @@ const linkList = (what) => ({
   ],
 });
 
-const pageFields = [
+export const pageFields = [
   { name: "light", label: "Page title, thin part", type: "text" },
   { name: "bold", label: "Page title, bold part", type: "text" },
   {
@@ -65,9 +65,22 @@ const pageFields = [
 ];
 
 // Menu group for each page, so the page list in the admin follows the site menu.
-function pageGroup(slug) {
-  const item = nav.find((n) => n.children && n.children.some((c) => c.path === `/${slug}`));
+// Pass the live menu (with the admin's changes) to follow it; defaults to the built-in one.
+export function pageGroup(slug, menu = nav) {
+  const item = (menu || []).find((n) => n.children && n.children.some((c) => c.path === `/${slug}`));
   return item ? item.label : "Other pages";
+}
+
+// The editor for one page, built-in or added by the admin.
+export function pageEditor(slug, page, menu) {
+  return {
+    group: pageGroup(slug, menu),
+    id: `page:${slug}`,
+    title: `${page?.light || ""} ${page?.bold || ""}`.trim() || `/${slug}`,
+    type: "object",
+    fields: pageFields,
+    custom: !(slug in pages),
+  };
 }
 
 export const editors = [
@@ -274,12 +287,12 @@ export const editors = [
     ],
   },
 
-  // one editor per page, in menu order
-  ...Object.keys(pages).map((slug) => ({
-    group: pageGroup(slug),
-    id: `page:${slug}`,
-    title: `${pages[slug].light} ${pages[slug].bold}`.trim(),
-    type: "object",
-    fields: pageFields,
-  })),
 ];
+
+// Every editor, including one per page (built-in and admin-added), grouped by the live menu.
+export function allEditors(content) {
+  return [
+    ...editors,
+    ...Object.keys(content.pages).map((slug) => pageEditor(slug, content.pages[slug], content.nav)),
+  ];
+}

@@ -1,11 +1,10 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 import PageLayout from "../components/PageLayout.jsx";
 import Section from "../components/Section.jsx";
-import { findGroup } from "../data/pages.js";
 import { useContent } from "../content.jsx";
 
 export default function ContentPage() {
-  const { pages } = useContent();
+  const { pages, nav } = useContent();
   const { slug } = useParams();
   const { pathname } = useLocation();
   const page = slug ? pages[slug] : null;
@@ -27,7 +26,7 @@ export default function ContentPage() {
     <PageLayout
       light={page.light}
       bold={page.bold}
-      group={findGroup(pathname)}
+      group={(nav || []).find((n) => n.children && n.children.some((c) => c.path === pathname)) || null}
       photos={page.photos}
     >
       {page.sections.length === 0 ? (

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { defaults, mergeContent, useContent } from "../content.jsx";
 import { api, getToken, setToken } from "./api.js";
 import FieldEditor from "./FieldEditor.jsx";
-import { editors } from "./schemas.js";
+import { allEditors, editors } from "./schemas.js";
 import "./admin.css";
 
 // Removes empty leftovers before saving: blank lines, empty rows, unused parts
@@ -120,7 +120,264 @@ function Account() {
   );
 }
 
-function Editor({ editor, onLoggedOut }) {
+// Page addresses that are already taken by built-in parts of the site.
+const RESERVED = ["admin", "gallery", "contact-us", "api", "uploads", "files"];
+
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+// A free page address for a new page: "sports-day", or "sports-day-2" if that is taken.
+function freeSlug(title, pages) {
+  const base = slugify(title) || "page";
+  let s = base;
+  for (let n = 2; s in pages || RESERVED.includes(s); n++) s = `${base}-${n}`;
+  return s;
+}
+
+// The header menu as headers with the pages inside them. The admin adds headers,
+// adds pages inside a header, and moves, renames or removes them. Every change is
+// saved straight away.
+function HeaderManager({ onOpenPage, onLoggedOut }) {
+  const { pages, nav, reload } = useContent();
+  const items = nav || [];
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [newHeader, setNewHeader] = useState("");
+  const [addingTo, setAddingTo] = useState(null); // index of the header getting a new page
+  const [pageTitle, setPageTitle] = useState("");
+  const [renaming, setRenaming] = useState(null);
+  const [renameText, setRenameText] = useState("");
+  const [confirm, setConfirm] = useState(null); // index of the header to remove
+
+  async function run(fn) {
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+      await reload();
+      return true;
+    } catch (err) {
+      if (err.status === 401) onLoggedOut();
+      else setError(err.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const saveNav = (next) => api("/content/nav", { method: "PUT", body: { data: next } });
+
+  async function addHeader(e) {
+    e.preventDefault();
+    const name = newHeader.trim();
+    if (!name) return setError("Please type a name for the header.");
+    if (items.some((n) => n.label.trim().toLowerCase() === name.toLowerCase()))
+      return setError(`There is already a header called "${name}".`);
+    if (await run(() => saveNav([...items, { label: name, children: [] }]))) setNewHeader("");
+  }
+
+  async function addPage(e, i) {
+    e.preventDefault();
+    const title = pageTitle.trim();
+    if (!title) return setError("Please type a title for the page.");
+    const slug = freeSlug(title, pages);
+    const next = items.map((n, k) =>
+      k === i ? { ...n, children: [...(n.children || []), { label: title, path: `/${slug}` }] } : n
+    );
+    const ok = await run(async () => {
+      await api(`/content/page:${slug}`, { method: "PUT", body: { data: { light: "", bold: title, sections: [] } } });
+      await saveNav(next);
+    });
+    if (ok) {
+      setAddingTo(null);
+      setPageTitle("");
+    }
+  }
+
+  const move = (i, d) => {
+    const next = [...items];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    run(() => saveNav(next));
+  };
+
+  const rename = async (e, i) => {
+    e.preventDefault();
+    const name = renameText.trim();
+    if (!name) return;
+    if (await run(() => saveNav(items.map((n, k) => (k === i ? { ...n, label: name } : n))))) setRenaming(null);
+  };
+
+  const removeHeader = (i) => {
+    setConfirm(null);
+    run(() => saveNav(items.filter((_, k) => k !== i)));
+  };
+
+  const removeLink = (i, j) =>
+    run(() =>
+      saveNav(items.map((n, k) => (k === i ? { ...n, children: n.children.filter((_, x) => x !== j) } : n)))
+    );
+
+  return (
+    <div className="adm-hm">
+      <form className="adm-hm__card adm-hm__add" onSubmit={addHeader}>
+        <label className="adm-label" htmlFor="hm-new">
+          Add a new header
+        </label>
+        <div className="adm-hm__inline">
+          <input
+            id="hm-new"
+            type="text"
+            placeholder="Header name, e.g. Activities"
+            value={newHeader}
+            onChange={(e) => setNewHeader(e.target.value)}
+          />
+          <button className="adm-btn" disabled={busy}>
+            + Add header
+          </button>
+        </div>
+        <p className="adm-help">
+          It is added at the end of the header. Then use "+ Add page" on it below. If there are more headers than fit,
+          the extra ones go into a "More" menu on the website automatically.
+        </p>
+      </form>
+
+      {error && <p className="adm-error">{error}</p>}
+
+      <h2 className="adm-hm__title">Your headers</h2>
+
+      {items.map((n, i) => {
+        const isLink = Boolean(n.path);
+        const children = n.children || [];
+        return (
+          <section key={i} className="adm-hm__card">
+            <div className="adm-hm__head">
+              {renaming === i ? (
+                <form className="adm-hm__inline" onSubmit={(e) => rename(e, i)}>
+                  <input autoFocus type="text" value={renameText} onChange={(e) => setRenameText(e.target.value)} />
+                  <button className="adm-btn" disabled={busy}>Save</button>
+                  <button type="button" className="adm-btn adm-btn--light" onClick={() => setRenaming(null)}>
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <h2>
+                  {n.label}
+                  {isLink && <small> — single link to {n.path}</small>}
+                </h2>
+              )}
+              <span className="adm-spacer" />
+              <button className="adm-hm__icon" title="Move left in the header" disabled={busy || i === 0} onClick={() => move(i, -1)}>
+                ↑
+              </button>
+              <button
+                className="adm-hm__icon"
+                title="Move right in the header"
+                disabled={busy || i === items.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                ↓
+              </button>
+              <button
+                className="adm-link"
+                onClick={() => {
+                  setRenaming(i);
+                  setRenameText(n.label);
+                }}
+              >
+                Rename
+              </button>
+              {confirm === i ? (
+                <>
+                  <button className="adm-btn adm-btn--danger" disabled={busy} onClick={() => removeHeader(i)}>
+                    Yes, remove
+                  </button>
+                  <button className="adm-btn adm-btn--light" onClick={() => setConfirm(null)}>
+                    Keep
+                  </button>
+                </>
+              ) : (
+                <button className="adm-link" onClick={() => setConfirm(i)}>
+                  Remove
+                </button>
+              )}
+            </div>
+            {confirm === i && (
+              <p className="adm-note">
+                This removes the header from the menu. Its pages are kept and can still be edited from the left.
+              </p>
+            )}
+
+            {!isLink && (
+              <>
+                {children.length === 0 ? (
+                  <p className="adm-note">No pages yet. The header shows on the website once it has a page.</p>
+                ) : (
+                  <ul className="adm-hm__pages">
+                    {children.map((c, j) => {
+                      const slug = c.path?.replace(/^\//, "");
+                      return (
+                        <li key={j}>
+                          <span>{c.label}</span>
+                          <small>{c.path}</small>
+                          <span className="adm-spacer" />
+                          {slug in pages && (
+                            <button className="adm-link" onClick={() => onOpenPage(`page:${slug}`)}>
+                              Edit page
+                            </button>
+                          )}
+                          <button className="adm-link" disabled={busy} onClick={() => removeLink(i, j)}>
+                            Remove from header
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {addingTo === i ? (
+                  <form className="adm-hm__inline" onSubmit={(e) => addPage(e, i)}>
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Page title, e.g. Sports Day"
+                      value={pageTitle}
+                      onChange={(e) => setPageTitle(e.target.value)}
+                    />
+                    <button className="adm-btn" disabled={busy}>
+                      {busy ? "Adding..." : "Add page"}
+                    </button>
+                    <button type="button" className="adm-btn adm-btn--light" onClick={() => setAddingTo(null)}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    className="adm-btn adm-btn--light"
+                    onClick={() => {
+                      setAddingTo(i);
+                      setPageTitle("");
+                      setError("");
+                    }}
+                  >
+                    + Add page to {n.label}
+                  </button>
+                )}
+              </>
+            )}
+          </section>
+        );
+      })}
+
+    </div>
+  );
+}
+
+function Editor({ editor, onLoggedOut, onDeleted }) {
   const content = useContent();
   const { saved, reload } = content;
   const original = valueFor(editor.id, content);
@@ -166,6 +423,29 @@ function Editor({ editor, onLoggedOut }) {
     return run(() => api(`/content/${editor.id}`, { method: "PUT", body: { data } }), "Saved. The website is updated.");
   };
 
+  // A page the admin added: delete it and take it out of the menu.
+  const removePage = async () => {
+    const path = `/${editor.id.slice(5)}`;
+    const strip = (items) =>
+      (items || [])
+        .filter((n) => n.path !== path)
+        .map((n) => (n.children ? { ...n, children: n.children.filter((c) => c.path !== path) } : n));
+    setBusy(true);
+    try {
+      await api(`/content/${editor.id}`, { method: "DELETE" });
+      const nav = strip(content.nav);
+      if (JSON.stringify(nav) !== JSON.stringify(content.nav)) {
+        await api("/content/nav", { method: "PUT", body: { data: nav } });
+      }
+      await reload();
+      onDeleted();
+    } catch (err) {
+      setBusy(false);
+      if (err.status === 401) return onLoggedOut();
+      setStatus({ ok: false, text: err.message });
+    }
+  };
+
   const reset = async () => {
     await run(() => api(`/content/${editor.id}`, { method: "DELETE" }), "Back to the original content.");
     const id = editor.id;
@@ -207,24 +487,28 @@ function Editor({ editor, onLoggedOut }) {
         {isChanged &&
           (confirmReset ? (
             <>
-              <span className="adm-note">Remove your changes to this section?</span>
+              <span className="adm-note">
+                {editor.custom
+                  ? "Delete this page and remove it from the menu?"
+                  : "Remove your changes to this section?"}
+              </span>
               <button
                 className="adm-btn adm-btn--danger"
                 disabled={busy}
                 onClick={() => {
                   setConfirmReset(false);
-                  reset();
+                  editor.custom ? removePage() : reset();
                 }}
               >
-                Yes, reset
+                {editor.custom ? "Yes, delete" : "Yes, reset"}
               </button>
               <button className="adm-btn adm-btn--light" onClick={() => setConfirmReset(false)}>
-                Keep them
+                {editor.custom ? "Keep it" : "Keep them"}
               </button>
             </>
           ) : (
             <button className="adm-btn adm-btn--light" disabled={busy} onClick={() => setConfirmReset(true)}>
-              Reset to original
+              {editor.custom ? "Delete this page" : "Reset to original"}
             </button>
           ))}
       </div>
@@ -237,7 +521,8 @@ export default function AdminApp() {
   const [email, setEmail] = useState("");
   const [current, setCurrent] = useState(editors[0].id);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { saved, reload } = useContent();
+  const content = useContent();
+  const { saved, reload } = content;
 
   const logout = () => {
     setToken("");
@@ -256,20 +541,26 @@ export default function AdminApp() {
       .catch(logout);
   }, [state]);
 
+  const list = useMemo(() => allEditors(content), [content]);
+
   const groups = useMemo(() => {
     const out = [];
-    for (const e of editors) {
+    for (const e of list) {
       let g = out.find((x) => x.name === e.group);
       if (!g) out.push((g = { name: e.group, items: [] }));
       g.items.push(e);
     }
     return out;
-  }, []);
+  }, [list]);
 
   if (state === "out") return <Login onDone={() => setState("checking")} />;
   if (state === "checking") return <p className="adm-loading">Loading...</p>;
 
-  const editor = editors.find((e) => e.id === current);
+  const editor = list.find((e) => e.id === current);
+  const pick = (id) => {
+    setCurrent(id);
+    setMenuOpen(false);
+  };
 
   return (
     <div className="adm">
@@ -289,6 +580,12 @@ export default function AdminApp() {
 
       <div className="adm-body">
         <nav className={`adm-side ${menuOpen ? "is-open" : ""}`}>
+          <div>
+            <h2>Header</h2>
+            <button className={current === "headers" ? "is-active" : ""} onClick={() => pick("headers")}>
+              Headers and pages
+            </button>
+          </div>
           {groups.map((g) => (
             <div key={g.name}>
               <h2>{g.name}</h2>
@@ -328,13 +625,24 @@ export default function AdminApp() {
               <p className="adm-help">Logged in as {email}</p>
               <Account />
             </>
-          ) : (
+          ) : current === "headers" ? (
+            <>
+              <h1>Headers and pages</h1>
+              <p className="adm-help">
+                The headers shown at the top of the website, in order, with the pages inside each one. Changes are
+                saved straight away.
+              </p>
+              <HeaderManager onOpenPage={pick} onLoggedOut={logout} />
+            </>
+          ) : editor ? (
             <>
               <h1>{editor.title}</h1>
               {editor.help && <p className="adm-help">{editor.help}</p>}
               {/* "key" gives each section its own fresh form */}
-              <Editor key={editor.id} editor={editor} onLoggedOut={logout} />
+              <Editor key={editor.id} editor={editor} onLoggedOut={logout} onDeleted={() => pick(editors[0].id)} />
             </>
+          ) : (
+            <p className="adm-help">This section no longer exists. Pick another one from the menu.</p>
           )}
         </main>
       </div>

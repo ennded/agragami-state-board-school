@@ -378,6 +378,61 @@ button {
   .nav__item:focus-within > .dropdown {
     display: block;
   }
+
+  /* The menu takes the space next to the logo; headers that do not fit
+     go into the "More" dropdown (see Header.jsx). */
+  .nav {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .nav > ul:first-child {
+    justify-content: flex-end;
+  }
+}
+
+/* Invisible row used to measure the headers. Never shown. */
+.nav__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 1279px) {
+  .nav__measure {
+    display: none;
+  }
+}
+
+/* Headers inside the "More" dropdown, each with its pages under it. */
+.nav__more .dropdown {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.dropdown__heading {
+  display: block;
+  padding: 10px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+}
+
+.dropdown__group > ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.dropdown__group a {
+  padding-left: 24px;
 }
 
 @media (max-width: 1279px) {
